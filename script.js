@@ -16,6 +16,7 @@ window.addEventListener('keyup', (e) => {
 });
 
 class Player {
+    static all = [];
     constructor(x, y, width, height, up, down, left, right, color) {
         this.width = width;
         this.height = height;
@@ -39,6 +40,14 @@ class Player {
 
         this.onFloor = false;
         this.doubleJumpUsed = false;
+
+        this.onPlatform = false;
+
+        Player.all.push(this);
+    }
+
+    static getAll() {
+        return Player.all;
     }
 
     update() {
@@ -65,7 +74,9 @@ class Player {
             }
         }
 
-        this.velocityY += this.gravity;
+        if (!this.onFloor && !this.onPlatform) {
+            this.velocityY += this.gravity;
+        }
 
         this.x += this.velocityX;
         this.y += this.velocityY;
@@ -156,7 +167,7 @@ function resolveCollision(a, b) {
             b.velocityY = 0;
 
             a.onFloor = true;
-            this.doubleJumpUsed = false;
+            a.doubleJumpUsed = false;
         }
 
         else if (minOverlap === overlapBottom) {
@@ -166,6 +177,9 @@ function resolveCollision(a, b) {
 
             a.velocityY = 0;
             b.velocityY = 0;
+
+            b.onFloor = true;
+            b.doubleJumpUsed = false;
         }
 
         else if (minOverlap === overlapLeft) {
@@ -179,6 +193,65 @@ function resolveCollision(a, b) {
             a.x += overlapRight / 2;
             b.x -= overlapRight / 2;
         }
+    }
+}
+
+class Block {
+    constructor(x, y, width, height, color, type) {
+        this.width = width;
+        this.height = height;
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        this.type = type;
+    }
+
+    collisions(target) {
+        return (
+            target.x < this.x + this.width &&
+            target.x + target.width > this.x &&
+            target.y < this.y + this.height &&
+            target.y + target.height > this.y
+        );
+    }
+
+    draw(ctx) {
+        ctx.fillStyle = this.color;
+        ctx.fillRect(this.x, this.y, this.width, this.height);
+    }
+}
+
+function BlockCollisions(block, target) {
+    if (!block.collisions(target)) return;
+
+    // Only resolve collisions by moving the player (block is immovable)
+    const overlapTop = target.y + target.height - block.y;
+    const overlapBottom = block.y + block.height - target.y;
+    const overlapLeft = target.x + target.width - block.x;
+    const overlapRight = block.x + block.width - target.x;
+
+    const minOverlap = Math.min(overlapTop, overlapBottom, overlapLeft, overlapRight);
+
+    if (minOverlap === overlapTop) {
+        // player landed on top of block
+        target.y -= overlapTop;
+        target.velocityY = 0;
+        target.onPlatform = true;
+        target.onFloor = true;
+        target.doubleJumpUsed = false;
+    }
+    else if (minOverlap === overlapBottom) {
+        // player hit block from below
+        target.y += overlapBottom;
+        target.velocityY = 0;
+    }
+    else if (minOverlap === overlapLeft) {
+        // player hit block from left
+        target.x -= overlapLeft;
+    }
+    else if (minOverlap === overlapRight) {
+        // player hit block from right
+        target.x += overlapRight;
     }
 }
 
@@ -209,6 +282,8 @@ class Data {
             'orange'
         );
 
+        this.block = new Block(500, canvas.height - 200, 100, 50, 'red', 'normal');
+
         this.border = new Border();
     }
 }
@@ -219,16 +294,20 @@ function GameLoop() {
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    data.player.update();
-    data.player2.update();
+    Player.getAll().forEach(p => p.update());
+    // reset platform state; collisions will set it when appropriate
+    Player.getAll().forEach(p => p.onPlatform = false);
+    Player.getAll().forEach(p => BlockCollisions(data.block, p));
 
     resolveCollision(data.player, data.player2);
 
-    data.border.checkCollision(data.player);
-    data.border.checkCollision(data.player2);
+    Player.getAll().forEach(p => {
+        data.border.checkCollision(p);
+    });
 
-    data.player.draw(ctx);
-    data.player2.draw(ctx);
+    data.block.draw(ctx);
+
+    Player.getAll().forEach(p => p.draw(ctx));
 
     previousKeys = { ...keys };
 

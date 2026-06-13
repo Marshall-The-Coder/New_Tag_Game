@@ -382,9 +382,9 @@ class Data {
             'orange'
         );
 
-        this.block = new Block(0, canvas.height - 200, 500, 50, 'red', 'normal');
+        this.block = new Block(0, canvas.height - 200, canvas.width / 3, 50, 'red', 'normal');
 
-        this.block2 = new Block(canvas.width - 500, canvas.height - 200, 500, 50, 'blue', 'normal');
+        this.block2 = new Block(canvas.width - canvas.width / 3, canvas.height - 200, 500, 50, 'blue', 'normal');
 
         this.border = new Border();
     }

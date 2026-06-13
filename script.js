@@ -174,7 +174,6 @@ function resolveCollision(a, b) {
         };
 
         if (aPrev.bottom <= bPrev.top) {
-            // A was above B
             a.y = b.y - a.height;
             a.velocityY = 0;
             a.onFloor = true;
@@ -213,7 +212,6 @@ function resolveCollision(a, b) {
         }
 
         if (bPrev.right <= aPrev.left) {
-            // B was left of A
             const overlap = b.x + b.width - a.x;
             if (overlap > 0) {
                 const mover = Math.abs(b.velocityX) >= Math.abs(a.velocityX) ? b : a;

@@ -42,6 +42,10 @@ class Player {
         this.doubleJumpUsed = false;
 
         this.onPlatform = false;
+        this.jumpRequest = false;
+
+        this.prevX = this.x;
+        this.prevY = this.y;
 
         Player.all.push(this);
     }
@@ -51,6 +55,9 @@ class Player {
     }
 
     update() {
+        this.prevX = this.x;
+        this.prevY = this.y;
+
         if (keys[this.left]) {
             this.velocityX = -this.speed;
         }
@@ -65,13 +72,7 @@ class Player {
             keys[this.up] && !previousKeys[this.up];
 
         if (jumpPressed) {
-            if (this.onFloor) {
-                this.velocityY = this.jumpStrength;
-            }
-            else if (!this.doubleJumpUsed) {
-                this.velocityY = this.jumpStrength;
-                this.doubleJumpUsed = true;
-            }
+            this.jumpRequest = true;
         }
 
         if (!this.onFloor && !this.onPlatform) {
@@ -87,7 +88,10 @@ class Player {
             this.onFloor = true;
             this.doubleJumpUsed = false;
         }
-        else {
+        else if (this.onPlatform){
+            this.onFloor = true;
+            this.doubleJumpUsed = false;
+        } else {
             this.onFloor = false;
         }
     }
@@ -95,6 +99,23 @@ class Player {
     draw(ctx) {
         ctx.fillStyle = this.color;
         ctx.fillRect(this.x, this.y, this.width, this.height);
+    }
+
+    processJump() {
+        if (!this.jumpRequest) return;
+
+        if (this.onFloor || this.onPlatform) {
+            this.velocityY = this.jumpStrength;
+            this.jumpRequest = false;
+            return;
+        }
+
+        if (!this.doubleJumpUsed) {
+            this.velocityY = this.jumpStrength;
+            this.doubleJumpUsed = true;
+        }
+
+        this.jumpRequest = false;
     }
 }
 
@@ -138,58 +159,110 @@ function resolveCollision(a, b) {
         a.y < b.y + b.height &&
         a.y + a.height > b.y
     ) {
+        const aPrev = {
+            left: (a.prevX !== undefined ? a.prevX : a.x),
+            top: (a.prevY !== undefined ? a.prevY : a.y),
+            right: (a.prevX !== undefined ? a.prevX + a.width : a.x + a.width),
+            bottom: (a.prevY !== undefined ? a.prevY + a.height : a.y + a.height)
+        };
 
-        const overlapTop =
-            a.y + a.height - b.y;
+        const bPrev = {
+            left: (b.prevX !== undefined ? b.prevX : b.x),
+            top: (b.prevY !== undefined ? b.prevY : b.y),
+            right: (b.prevX !== undefined ? b.prevX + b.width : b.x + b.width),
+            bottom: (b.prevY !== undefined ? b.prevY + b.height : b.y + b.height)
+        };
 
-        const overlapBottom =
-            b.y + b.height - a.y;
+        if (aPrev.bottom <= bPrev.top) {
+            // A was above B
+            a.y = b.y - a.height;
+            a.velocityY = 0;
+            a.onFloor = true;
+            a.doubleJumpUsed = false;
+            return;
+        }
 
-        const overlapLeft =
-            a.x + a.width - b.x;
+        if (bPrev.bottom <= aPrev.top) {
+            b.y = a.y - b.height;
+            b.velocityY = 0;
+            b.onFloor = true;
+            b.doubleJumpUsed = false;
+            return;
+        }
 
-        const overlapRight =
-            b.x + b.width - a.x;
+        if (aPrev.right <= bPrev.left) {
+            const overlap = a.x + a.width - b.x;
+            if (overlap > 0) {
+                const mover = Math.abs(a.velocityX) >= Math.abs(b.velocityX) ? a : b;
+                const other = mover === a ? b : a;
 
-        const minOverlap = Math.min(
-            overlapTop,
-            overlapBottom,
-            overlapLeft,
-            overlapRight
-        );
+                if (Math.abs(mover.velocityX) > 0) {
+                    if (mover === a) {
+                        other.x += overlap;
+                    } else {
+                        other.x -= overlap;
+                    }
+                    other.velocityX = mover.velocityX * 0.8;
+                    mover.velocityX *= 0.2;
+                } else {
+                    a.x -= overlap / 2;
+                    b.x += overlap / 2;
+                }
+            }
+            return;
+        }
+
+        if (bPrev.right <= aPrev.left) {
+            // B was left of A
+            const overlap = b.x + b.width - a.x;
+            if (overlap > 0) {
+                const mover = Math.abs(b.velocityX) >= Math.abs(a.velocityX) ? b : a;
+                const other = mover === b ? a : b;
+
+                if (Math.abs(mover.velocityX) > 0) {
+                    if (mover === b) {
+                        other.x += overlap;
+                    } else {
+                        other.x -= overlap;
+                    }
+                    other.velocityX = mover.velocityX * 0.8;
+                    mover.velocityX *= 0.2;
+                } else {
+                    b.x -= overlap / 2;
+                    a.x += overlap / 2;
+                }
+            }
+            return;
+        }
+
+        const overlapTop = a.y + a.height - b.y;
+        const overlapBottom = b.y + b.height - a.y;
+        const overlapLeft = a.x + a.width - b.x;
+        const overlapRight = b.x + b.width - a.x;
+
+        const minOverlap = Math.min(overlapTop, overlapBottom, overlapLeft, overlapRight);
 
         if (minOverlap === overlapTop) {
-
             a.y -= overlapTop / 2;
             b.y += overlapTop / 2;
-
             a.velocityY = 0;
             b.velocityY = 0;
-
             a.onFloor = true;
             a.doubleJumpUsed = false;
         }
-
         else if (minOverlap === overlapBottom) {
-
             a.y += overlapBottom / 2;
             b.y -= overlapBottom / 2;
-
             a.velocityY = 0;
             b.velocityY = 0;
-
             b.onFloor = true;
             b.doubleJumpUsed = false;
         }
-
         else if (minOverlap === overlapLeft) {
-
             a.x -= overlapLeft / 2;
             b.x += overlapLeft / 2;
         }
-
         else if (minOverlap === overlapRight) {
-
             a.x += overlapRight / 2;
             b.x -= overlapRight / 2;
         }
@@ -197,6 +270,7 @@ function resolveCollision(a, b) {
 }
 
 class Block {
+    static all = [];
     constructor(x, y, width, height, color, type) {
         this.width = width;
         this.height = height;
@@ -204,6 +278,7 @@ class Block {
         this.y = y;
         this.color = color;
         this.type = type;
+        Block.all.push(this);
     }
 
     collisions(target) {
@@ -214,6 +289,9 @@ class Block {
             target.y + target.height > this.y
         );
     }
+    static getAll() {
+        return Block.all;
+    }
 
     draw(ctx) {
         ctx.fillStyle = this.color;
@@ -223,8 +301,36 @@ class Block {
 
 function BlockCollisions(block, target) {
     if (!block.collisions(target)) return;
+    const prevBottom = target.prevY + target.height;
+    const prevTop = target.prevY;
+    const prevRight = target.prevX + target.width;
+    const prevLeft = target.prevX;
 
-    // Only resolve collisions by moving the player (block is immovable)
+    if (prevBottom <= block.y) {
+        target.y = block.y - target.height;
+        target.onFloor = true;
+        target.onPlatform = true;
+        target.doubleJumpUsed = false;
+        target.velocityY = 0;
+        return;
+    }
+
+    if (prevTop >= block.y + block.height) {
+        target.y = block.y + block.height;
+        target.velocityY = 0;
+        return;
+    }
+
+    if (prevRight <= block.x) {
+        target.x = block.x - target.width;
+        return;
+    }
+
+    if (prevLeft >= block.x + block.width) {
+        target.x = block.x + block.width;
+        return;
+    }
+
     const overlapTop = target.y + target.height - block.y;
     const overlapBottom = block.y + block.height - target.y;
     const overlapLeft = target.x + target.width - block.x;
@@ -233,24 +339,20 @@ function BlockCollisions(block, target) {
     const minOverlap = Math.min(overlapTop, overlapBottom, overlapLeft, overlapRight);
 
     if (minOverlap === overlapTop) {
-        // player landed on top of block
         target.y -= overlapTop;
-        target.velocityY = 0;
-        target.onPlatform = true;
         target.onFloor = true;
+        target.onPlatform = true;
         target.doubleJumpUsed = false;
+        target.velocityY = 0;
     }
     else if (minOverlap === overlapBottom) {
-        // player hit block from below
         target.y += overlapBottom;
         target.velocityY = 0;
     }
     else if (minOverlap === overlapLeft) {
-        // player hit block from left
         target.x -= overlapLeft;
     }
     else if (minOverlap === overlapRight) {
-        // player hit block from right
         target.x += overlapRight;
     }
 }
@@ -282,7 +384,9 @@ class Data {
             'orange'
         );
 
-        this.block = new Block(500, canvas.height - 200, 100, 50, 'red', 'normal');
+        this.block = new Block(0, canvas.height - 200, 500, 50, 'red', 'normal');
+
+        this.block2 = new Block(canvas.width - 500, canvas.height - 200, 500, 50, 'blue', 'normal');
 
         this.border = new Border();
     }
@@ -295,9 +399,10 @@ function GameLoop() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     Player.getAll().forEach(p => p.update());
-    // reset platform state; collisions will set it when appropriate
     Player.getAll().forEach(p => p.onPlatform = false);
-    Player.getAll().forEach(p => BlockCollisions(data.block, p));
+    Block.getAll().forEach(b => {
+        Player.getAll().forEach(p => BlockCollisions(b, p));
+    });
 
     resolveCollision(data.player, data.player2);
 
@@ -305,7 +410,9 @@ function GameLoop() {
         data.border.checkCollision(p);
     });
 
-    data.block.draw(ctx);
+    Player.getAll().forEach(p => p.processJump());
+
+    Block.getAll().forEach(b => b.draw(ctx));
 
     Player.getAll().forEach(p => p.draw(ctx));
 
